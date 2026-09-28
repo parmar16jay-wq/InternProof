@@ -1,0 +1,19 @@
+﻿import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+const API = "";
+const authHeaders = () => ({ Authorization: `Bearer ${JSON.parse(sessionStorage.getItem("user") || "{}").token || ""}` });
+function MyProgress() {
+  const [tasks, setTasks] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState("");
+  useEffect(() => { const user = JSON.parse(sessionStorage.getItem("user") || "null"); if (!user?.token) { window.location.href = "/login"; return; }
+    fetch(`${API}/api/tasks/student/${user.user_id}`, { headers: authHeaders() }).then(async (r) => { if (!r.ok) throw new Error("Unable to load progress."); setTasks(await r.json()); }).catch((e) => setError(e.message)).finally(() => setLoading(false)); }, []);
+  const total = tasks.length; const approved = tasks.filter((t) => t.status === "approved").length; const remaining = total - approved; const progress = total ? Math.round(approved / total * 100) : 0;
+  const internshipProgress = Object.values(tasks.reduce((groups, task) => { const key = task.internship_id; groups[key] ||= { id: key, total: 0, approved: 0 }; groups[key].total += 1; if (task.status === "approved") groups[key].approved += 1; return groups; }, {}));
+  return <div className="container py-4"><div className="d-flex justify-content-between align-items-center mb-4"><div><h2 className="fw-bold mb-1">My Progress</h2><p className="text-muted mb-0">Only company approved tasks count toward verified progress.</p></div><Link to="/student/dashboard" className="btn btn-outline-primary">← Back to Dashboard</Link></div>
+    {loading ? <p>Loading your progress...</p> : error ? <div className="alert alert-danger">{error}</div> : <><div className="card shadow-sm border-0 mb-4"><div className="card-body text-center py-5"><h3 className="fw-bold">Verified Internship Progress</h3><h1 className="display-3 fw-bold text-info">{progress}%</h1><div className="progress mx-auto" style={{ maxWidth: 700, height: 25 }}><div className="progress-bar bg-info" style={{ width: `${progress}%` }}>{progress}%</div></div><p className="text-muted mt-3 mb-0">Based on {approved} approved of {total} assigned tasks</p></div></div>
+      <div className="row g-4"><div className="col-md-4"><div className="card h-100"><div className="card-body text-center"><h5>Total Tasks</h5><h2 className="text-primary">{total}</h2></div></div></div><div className="col-md-4"><div className="card h-100"><div className="card-body text-center"><h5>Approved</h5><h2 className="text-success">{approved}</h2></div></div></div><div className="col-md-4"><div className="card h-100"><div className="card-body text-center"><h5>Remaining</h5><h2 className="text-warning">{remaining}</h2></div></div></div></div>
+      <div className={`alert mt-4 ${total > 0 && approved === total ? "alert-success" : "alert-info"}`}><strong>Certificate Eligibility:</strong> {total > 0 && approved === total ? "Eligible" : "Not Yet Eligible"}<div className="small mt-1">Eligibility reflects approved task progress; the existing certificate upload process remains unchanged.</div></div>
+      {internshipProgress.length > 1 && <div className="card mt-4"><div className="card-body"><h5 className="fw-bold">Progress by Internship</h5><div className="table-responsive"><table className="table mb-0"><thead><tr><th>Internship ID</th><th>Approved</th><th>Verified Progress</th><th>Certificate Eligibility</th></tr></thead><tbody>{internshipProgress.map((item) => <tr key={item.id}><td>{item.id}</td><td>{item.approved} / {item.total}</td><td>{Math.round(item.approved / item.total * 100)}%</td><td>{item.approved === item.total ? <span className="badge bg-success">Eligible</span> : <span className="badge bg-warning text-dark">Not Yet Eligible</span>}</td></tr>)}</tbody></table></div></div></div>}
+    </>}</div>;
+}
+export default MyProgress;
+
