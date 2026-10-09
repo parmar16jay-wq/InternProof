@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     Boolean,
     ForeignKey,
+    UniqueConstraint,
 )
 
 from sqlalchemy.sql import func
@@ -21,6 +22,7 @@ from database import Base
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("college_id", "roll_number", name="uq_student_college_roll"),)
 
     id = Column(
         Integer,
@@ -56,10 +58,25 @@ class User(Base):
         nullable=False
     )
 
+    company_code = Column(String(40), unique=True, nullable=True, index=True)
     company_verified = Column(Boolean, nullable=False, default=False, server_default="0")
     company_verification_status = Column(String(20), nullable=False, default="pending", server_default="pending")
     company_verified_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_verified_at = Column(DateTime, nullable=True)
+
+    # Student affiliation is tied to a registered college account. Selecting a
+    # college creates a pending request; only that college can verify it.
+    college_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    college_code = Column(String(40), unique=True, nullable=True, index=True)
+    roll_number = Column(String(80), nullable=True, index=True)
+    department = Column(String(150), nullable=True)
+    course = Column(String(150), nullable=True)
+    year = Column(String(40), nullable=True)
+    semester = Column(String(40), nullable=True)
+    college_verification_status = Column(String(30), nullable=False, default="not_requested", server_default="not_requested")
+    college_verified_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    college_verified_at = Column(DateTime, nullable=True)
+    college_rejection_reason = Column(Text, nullable=True)
 
     created_at = Column(
         TIMESTAMP,
@@ -392,6 +409,44 @@ class Certificate(Base):
     internship = relationship(
         "Internship"
     )
+
+
+class MentorEvaluation(Base):
+    __tablename__ = "mentor_evaluations"
+    __table_args__ = (UniqueConstraint("internship_id", "student_id", name="uq_mentor_eval_internship_student"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    internship_id = Column(Integer, ForeignKey("internships.id"), nullable=False, index=True)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    mentor_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    evaluation = Column(Text, nullable=False)
+    rating = Column(Integer, nullable=True)
+    tasks_completed = Column(Integer, nullable=True)
+    tasks_total = Column(Integer, nullable=True)
+    approval_status = Column(String(20), nullable=False, default="pending")
+    submitted_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    mentor = relationship("User", foreign_keys=[mentor_id])
+    student = relationship("User", foreign_keys=[student_id])
+    internship = relationship("Internship")
+
+
+class CollegeInternshipReview(Base):
+    __tablename__ = "college_internship_reviews"
+    __table_args__ = (UniqueConstraint("internship_id", "student_id", name="uq_college_review_internship_student"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    internship_id = Column(Integer, ForeignKey("internships.id"), nullable=False, index=True)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    college_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    status = Column(String(30), nullable=False, default="pending")
+    evaluation_requested = Column(Boolean, nullable=False, default=False)
+    evaluation_reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    evaluation_reviewed_at = Column(DateTime, nullable=True)
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    internship = relationship("Internship")
+    student = relationship("User", foreign_keys=[student_id])
 
 
 class Message(Base):

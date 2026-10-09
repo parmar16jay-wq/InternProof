@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 function Register() {
@@ -7,7 +7,33 @@ function Register() {
     email: "",
     password: "",
     role: "student",
+    college_id: "",
+    roll_number: "",
+    department: "",
+    course: "",
+    year: "",
+    semester: "",
+    college_code: "",
+    company_code: "",
   });
+  const [colleges, setColleges] = useState([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadColleges = async () => {
+      try {
+        const response = await fetch("http://127.0.0.1:8000/api/colleges", { cache: "no-store" });
+        const data = response.ok ? await response.json() : [];
+        if (mounted) setColleges(data);
+      } catch {
+        if (mounted) setColleges([]);
+      }
+    };
+    void loadColleges();
+    window.addEventListener("focus", loadColleges);
+    window.addEventListener("pageshow", loadColleges);
+    return () => { mounted = false; window.removeEventListener("focus", loadColleges); window.removeEventListener("pageshow", loadColleges); };
+  }, []);
 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -37,7 +63,7 @@ function Register() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(formData),
+          body: JSON.stringify({ ...formData, college_id: formData.college_id ? Number(formData.college_id) : null }),
         }
       );
 
@@ -55,8 +81,16 @@ function Register() {
         email: "",
         password: "",
         role: "student",
+        college_id: "",
+        roll_number: "",
+        department: "",
+        course: "",
+        year: "",
+        semester: "",
+        college_code: "",
+        company_code: "",
       });
-    } catch (error) {
+    } catch {
       setError(
         "Unable to connect to the server. Make sure the backend is running."
       );
@@ -107,6 +141,13 @@ function Register() {
                 required
               />
             </div>
+
+            {formData.role === "student" && <>
+              <div className="mb-3"><label className="form-label" htmlFor="register-college">Registered college</label><select id="register-college" name="college_id" className="form-select" value={formData.college_id} onChange={handleChange}><option value="">Select a college (optional)</option>{colleges.map((college) => <option key={college.id} value={college.id}>{college.full_name} · {college.college_code}</option>)}</select><small className="text-muted">Your college must approve your affiliation before you are marked verified.</small></div>
+              <div className="row g-3 mb-3"><div className="col-md-6"><label className="form-label" htmlFor="register-roll-number">Roll number / Student ID</label><input id="register-roll-number" name="roll_number" className="form-control" placeholder="Enter your roll number" value={formData.roll_number} onChange={handleChange} required={Boolean(formData.college_id)} /></div><div className="col-md-6"><label className="form-label" htmlFor="register-department">Department</label><input id="register-department" name="department" className="form-control" placeholder="e.g. Computer Applications" value={formData.department} onChange={handleChange} required={Boolean(formData.college_id)} /></div><div className="col-md-6"><label className="form-label" htmlFor="register-course">Course / Program</label><input id="register-course" name="course" className="form-control" placeholder="e.g. BCA" value={formData.course} onChange={handleChange} required={Boolean(formData.college_id)} /></div><div className="col-md-6"><label className="form-label" htmlFor="register-year">Year</label><input id="register-year" name="year" className="form-control" placeholder="e.g. FY, SY, TY" value={formData.year} onChange={handleChange} required={Boolean(formData.college_id)} /></div><div className="col-md-6"><label className="form-label" htmlFor="register-semester">Semester</label><input id="register-semester" name="semester" className="form-control" placeholder="e.g. III" value={formData.semester} onChange={handleChange} required={Boolean(formData.college_id)} /></div></div>
+            </>}
+            {formData.role === "college" && <div className="mb-3"><label className="form-label" htmlFor="register-college-code">College code</label><input id="register-college-code" name="college_code" className="form-control" placeholder="Enter your registered college code" value={formData.college_code} onChange={handleChange} autoCapitalize="characters" required /></div>}
+            {formData.role === "company" && <div className="mb-3"><label className="form-label" htmlFor="register-company-code">Company code</label><input id="register-company-code" name="company_code" className="form-control" placeholder="Enter your company code" value={formData.company_code || ""} onChange={handleChange} autoCapitalize="characters" required /></div>}
 
             <div className="mb-3">
               <label className="form-label" htmlFor="register-email">

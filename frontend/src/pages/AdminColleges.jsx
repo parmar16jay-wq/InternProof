@@ -26,7 +26,7 @@ function AdminColleges() {
       setError("");
 
       const [usersResponse, internshipsResponse] = await Promise.all([
-        fetch("http://127.0.0.1:8000/api/users"),
+        fetch("http://127.0.0.1:8000/api/users", { headers: { Authorization: `Bearer ${JSON.parse(sessionStorage.getItem("user") || "{}").token || ""}` } }),
         fetch("http://127.0.0.1:8000/api/internships"),
       ]);
 

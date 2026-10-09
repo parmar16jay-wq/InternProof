@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { StatusBadge } from "../UiComponents";
 
@@ -6,7 +6,9 @@ const API = "http://127.0.0.1:8000/api";
 const roles = { student: "Student", company: "Company", college: "College" };
 
 async function getList(path) {
-  const response = await fetch(API + path);
+  let token = "";
+  try { token = JSON.parse(sessionStorage.getItem("user") || "{}").token || ""; } catch { /* no session */ }
+  const response = await fetch(API + path, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
   if (!response.ok) throw new Error("Request failed: " + response.status);
   const data = await response.json();
   if (!Array.isArray(data)) throw new Error("Unexpected response");
@@ -79,37 +81,16 @@ async function loadCompany(userId) {
 }
 
 async function loadCollege() {
-  const [usersResult, internshipsResult] = await Promise.allSettled([getList("/users"), getList("/internships")]);
-  const users = valueOf(usersResult);
-  const internships = valueOf(internshipsResult);
-  const students = users?.filter((user) => user.role === "student") || [];
-  const [applicationResults, taskResults, certificateResults] = await Promise.all([
-    Promise.allSettled((internships || []).map((item) => getList("/applications/internship/" + item.id))),
-    Promise.allSettled(students.map((student) => getList("/tasks/student/" + student.id))),
-    Promise.allSettled(students.map((student) => getList("/certificates/student/" + student.id))),
-  ]);
-  const applications = applicationResults.flatMap(valueOf).filter(Boolean);
-  const tasks = taskResults.flatMap(valueOf).filter(Boolean);
-  const certificates = certificateResults.flatMap(valueOf).filter(Boolean);
-  const appsLoaded = Boolean(internships) && applicationResults.every((result) => result.status === "fulfilled");
-  const tasksLoaded = Boolean(users) && taskResults.every((result) => result.status === "fulfilled");
-  const certsLoaded = Boolean(users) && certificateResults.every((result) => result.status === "fulfilled");
-  return {
-    failed: !users || !internships || !appsLoaded || !tasksLoaded || !certsLoaded,
-    activity: {
-      students, internships: internships || [], applications,
-      completed: tasks.filter((task) => task.status === "completed").length,
-      pending: tasks.filter((task) => task.status !== "completed").length,
-      tasksLoaded,
-    },
-    stats: [
-      { label: "Students", value: users ? students.length : null },
-      { label: "Internships", value: internships?.length ?? null },
-      { label: "Applications", value: appsLoaded ? applications.length : null },
-      { label: "Active internships", value: internships ? internships.filter((item) => item.status === "active").length : null },
-      { label: "Certificates", value: certsLoaded ? certificates.length : null },
-    ],
-  };
+  const response = await fetch(API + "/college/overview", { headers: { Authorization: `Bearer ${JSON.parse(sessionStorage.getItem("user") || "{}").token || ""}` } });
+  if (!response.ok) throw new Error("Unable to load college profile summary.");
+  const summary = await response.json();
+  return { failed: false, activity: null, stats: [
+    { label: "Students", value: summary.total_students },
+    { label: "Verified students", value: summary.verified_students },
+    { label: "Pending verification", value: summary.pending_student_verification },
+    { label: "Internships", value: summary.total_internships },
+    { label: "Certificates", value: summary.certificates_issued },
+  ] };
 }
 
 function ProfileSummary({ user, role }) {
@@ -194,9 +175,35 @@ function ProfileSummary({ user, role }) {
 function AccountInformation({ user, role }) {
   const nameLabel = role === "company" ? "Company name" : role === "college" ? "College name" : "Full name";
   const rows = [[nameLabel, user.full_name], ["Email address", user.email], ["User ID", user.user_id], ["Role", roles[role]]];
+  if (role === "college") rows.push(["College code", user.college_code]);
+  if (role === "company") rows.push(["Company code", user.company_code]);
+  if (role === "student" && user.college_id) rows.push(["College", user.college_name], ["College code", user.college_code], ["Roll number / Student ID", user.roll_number], ["Department", user.department], ["Course", user.course], ["Year", user.year], ["Semester", user.semester], ["College verification", user.college_verification_status === "verified" ? "College Verified" : user.college_verification_status === "rejected" ? "Rejected" : "Pending College Verification"]);
   return <section className="panel-card profile-information-card">
     <div className="panel-heading"><div><span className="section-eyebrow">ACCOUNT INFORMATION</span><h2>Personal details</h2></div></div>
     <div className="profile-information-list">{rows.map(([label, value]) => <div className="profile-information-row" key={label}><span>{label}</span><strong>{value || "Not provided"}</strong></div>)}</div>
+  </section>;
+}
+
+function StudentCollegeAffiliation({ user, onUserChange }) {
+  const [colleges, setColleges] = useState([]);
+  const [form, setForm] = useState({ college_id: user.college_id || "", roll_number: user.roll_number || "", department: user.department || "", course: user.course || "", year: user.year || "", semester: user.semester || "" });
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { fetch(API + "/colleges").then((r) => r.ok ? r.json() : []).then(setColleges).catch(() => setColleges([])); }, []);
+  const update = (event) => setForm((previous) => ({ ...previous, [event.target.name]: event.target.value }));
+  const save = async (event) => {
+    event.preventDefault(); setBusy(true); setError(""); setMessage("");
+    try {
+      const response = await fetch(API + "/student/college-affiliation", { method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${user.token || ""}` }, body: JSON.stringify({ ...form, college_id: Number(form.college_id) }) });
+      const result = await response.json(); if (!response.ok) throw new Error(result.detail || "Unable to submit academic details.");
+      setMessage("Details submitted. Your college must approve the request before you are marked College Verified.");
+      const current = await fetch(API + "/auth/me", { headers: { Authorization: `Bearer ${user.token || ""}` } });
+      if (current.ok) { const next = { ...user, ...await current.json() }; sessionStorage.setItem("user", JSON.stringify(next)); onUserChange(next); }
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
+  };
+  return <section className="panel-card mt-3"><div className="panel-heading"><div><span className="section-eyebrow">STUDENT AFFILIATION</span><h2>College and academic details</h2></div></div><p className="text-muted">Selecting a college submits a verification request. It does not automatically verify your affiliation.</p>{error && <div className="alert alert-danger">{error}</div>}{message && <div className="alert alert-success">{message}</div>}
+    <form className="row g-3" onSubmit={save}><div className="col-md-6"><label className="form-label">Registered college</label><select className="form-select" name="college_id" value={form.college_id} onChange={update} required><option value="">Select a college</option>{colleges.map((item) => <option key={item.id} value={item.id}>{item.full_name} · {item.college_code}</option>)}</select></div><div className="col-md-6"><label className="form-label">Roll number / Student ID</label><input className="form-control" name="roll_number" value={form.roll_number} onChange={update} required /></div><div className="col-md-6"><label className="form-label">Department</label><input className="form-control" name="department" value={form.department} onChange={update} required /></div><div className="col-md-6"><label className="form-label">Course / Program</label><input className="form-control" name="course" value={form.course} onChange={update} required /></div><div className="col-md-6"><label className="form-label">Year (FY, SY, TY, etc.)</label><input className="form-control" name="year" value={form.year} onChange={update} required /></div><div className="col-md-6"><label className="form-label">Semester</label><input className="form-control" name="semester" value={form.semester} onChange={update} required /></div><div className="col-12"><button className="btn btn-primary" disabled={busy}>{busy ? "Submitting…" : "Submit for college verification"}</button>{user.college_id && <span className="ms-3">Current status: <StatusBadge status={user.college_verification_status} /></span>}</div></form>
   </section>;
 }
 
@@ -243,12 +250,11 @@ function CompanyActivity({ data }) {
 
 function CollegeActivity({ data }) {
   return <section className="panel-card">
-    <div className="panel-heading"><div><span className="section-eyebrow">COLLEGE OVERVIEW</span><h2>Platform monitoring</h2></div><Link to="/college/reports">View reports</Link></div>
-    <p className="text-muted">These totals reflect platform-wide activity. The current API does not associate students or internships with a specific college account.</p>
-    <div className="profile-detail-grid">{[["Tasks completed", data?.completed], ["Tasks pending", data?.pending]].map(([label, value]) => <div className="profile-detail-tile" key={label}><span>{label}</span><strong>{data?.tasksLoaded ? value : "—"}</strong></div>)}</div>
+    <div className="panel-heading"><div><span className="section-eyebrow">COLLEGE OVERVIEW</span><h2>College activity</h2></div><Link to="/college/reports">View reports</Link></div>
+    <p className="text-muted">These totals include only students and internship records associated with your registered college.</p>
+    <div className="profile-detail-grid">{(data?.stats || []).map(({ label, value }) => <div className="profile-detail-tile" key={label}><span>{label}</span><strong>{value ?? "Unavailable"}</strong></div>)}</div>
   </section>;
 }
-
 function SecurityCard() {
   return <section className="panel-card security-card">
     <div><span className="section-eyebrow">SECURITY</span><h2>Password</h2><p className="security-masked" aria-label="Password hidden">••••••••••••••</p><small>Your current password cannot be viewed. Passwords are stored as one-way hashes.</small></div>
@@ -284,6 +290,7 @@ export default function ProfilePage({ role }) {
     {error && <div className="alert alert-danger" role="alert">{error}</div>}
     {profile?.failed && <div className="alert alert-warning" role="status">Some activity details are temporarily unavailable. Any unavailable totals are shown as —.</div>}
     <div className="row g-3 profile-top-row"><div className="col-lg-4"><ProfileSummary user={user} role={role} /></div><div className="col-lg-8"><AccountInformation user={user} role={role} /></div></div>
-    {profile && <><ProfileStats stats={profile.stats} />{role === "student" && <StudentActivity current={profile.current} currentUnavailable={profile.currentUnavailable} applications={profile.activity.applications} applicationsLoaded={profile.activity.applicationsLoaded} internships={profile.activity.internships} />}{role === "company" && <CompanyActivity data={profile.activity} />}{role === "college" && <CollegeActivity data={profile.activity} />}<SecurityCard /></>}
+    {role === "student" && <StudentCollegeAffiliation user={user} onUserChange={setUser} />}
+    {profile && <><ProfileStats stats={profile.stats} />{role === "student" && <StudentActivity current={profile.current} currentUnavailable={profile.currentUnavailable} applications={profile.activity.applications} applicationsLoaded={profile.activity.applicationsLoaded} internships={profile.activity.internships} />}{role === "company" && <CompanyActivity data={profile.activity} />}{role === "college" && <CollegeActivity data={profile} />}<SecurityCard /></>}
   </div>;
 }

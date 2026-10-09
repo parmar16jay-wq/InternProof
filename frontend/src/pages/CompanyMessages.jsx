@@ -9,6 +9,7 @@ function CompanyMessages() {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState("");
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -42,131 +43,15 @@ function CompanyMessages() {
   const loadAcceptedStudents = async (companyId) => {
     try {
       setLoading(true);
-
-      const internshipResponse = await fetch(
-        "http://127.0.0.1:8000/api/internships"
-      );
-
-      if (!internshipResponse.ok) {
-        throw new Error("Unable to load internships.");
-      }
-
-      const internshipData =
-        await internshipResponse.json();
-
-      const companyInternships =
-        internshipData.filter(
-          (internship) =>
-            internship.created_by === companyId
-        );
-
-      let acceptedStudents = [];
-
-      for (const internship of companyInternships) {
-        try {
-          const applicationResponse =
-            await fetch(
-              `http://127.0.0.1:8000/api/applications/internship/${internship.id}`
-            );
-
-          if (!applicationResponse.ok) {
-            continue;
-          }
-
-          const applicationData =
-            await applicationResponse.json();
-
-          const acceptedApplications =
-            applicationData.filter(
-              (application) =>
-                application.status === "accepted"
-            );
-
-          const studentsWithInternship =
-            acceptedApplications.map(
-              (application) => ({
-                student_id:
-                  application.student_id,
-
-                application_id:
-                  application.id,
-
-                internship_id:
-                  internship.id,
-
-                internship_title:
-                  internship.title,
-
-                internship_company:
-                  internship.company_name,
-
-                internship_location:
-                  internship.location,
-
-                internship_start_date:
-                  internship.start_date,
-
-                internship_end_date:
-                  internship.end_date,
-              })
-            );
-
-          acceptedStudents = [
-            ...acceptedStudents,
-            ...studentsWithInternship,
-          ];
-        } catch (error) {
-          console.error(
-            `Unable to load applications for internship ${internship.id}:`,
-            error
-          );
-        }
-      }
-
-      /*
-       * Remove duplicate students.
-       * A student may be accepted for more than one internship.
-       * We keep one entry for each student.
-       */
-      const uniqueStudents = [];
-
-      acceptedStudents.forEach((student) => {
-        const alreadyExists =
-          uniqueStudents.some(
-            (item) =>
-              item.student_id ===
-              student.student_id
-          );
-
-        if (!alreadyExists) {
-          uniqueStudents.push(student);
-        }
-      });
-
+      const token = JSON.parse(sessionStorage.getItem("user") || "{}").token || "";
+      const response = await fetch("/api/company/workspace", { headers: { Authorization: `Bearer ${token}` } });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Unable to load interns.");
+      const uniqueStudents = data.interns;
       setStudents(uniqueStudents);
-
-      /*
-       * Automatically select the first accepted student.
-       */
-      if (uniqueStudents.length > 0) {
-        setSelectedStudent(uniqueStudents[0]);
-        loadMessages(
-          companyId,
-          uniqueStudents[0].student_id
-        );
-      }
-    } catch (error) {
-      console.error(
-        "Accepted students message error:",
-        error
-      );
-
-      alert(
-        "Unable to load accepted students. Please try again."
-      );
-    } finally {
-      setLoading(false);
-    }
+      if (uniqueStudents.length) { setSelectedStudent(uniqueStudents[0]); loadMessages(companyId, uniqueStudents[0].student_id); }
+    } catch (error) { console.error("Accepted student messages error:", error); }
+    finally { setLoading(false); }
   };
 
   const loadMessages = async (
@@ -177,7 +62,7 @@ function CompanyMessages() {
       setMessagesLoading(true);
 
       const response = await fetch(
-        `http://127.0.0.1:8000/api/messages/user/${companyId}`
+        `/api/messages/user/${companyId}`, { headers: { Authorization: `Bearer ${user?.token || ""}` } }
       );
 
       if (!response.ok) {
@@ -217,9 +102,9 @@ function CompanyMessages() {
       for (const message of unreadMessages) {
         try {
           await fetch(
-            `http://127.0.0.1:8000/api/messages/${message.id}/read`,
+            `/api/messages/${message.id}/read`,
             {
-              method: "PUT",
+              method: "PUT", headers: { Authorization: `Bearer ${user?.token || ""}` },
             }
           );
         } catch (error) {
@@ -285,12 +170,10 @@ function CompanyMessages() {
       setSending(true);
 
       const response = await fetch(
-        "http://127.0.0.1:8000/api/messages",
+        "/api/messages",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${user?.token || ""}` },
           body: JSON.stringify({
             sender_id: user.user_id,
             receiver_id:
@@ -410,11 +293,10 @@ function CompanyMessages() {
 
               <div className="card-body">
 
-                <h5 className="fw-bold mb-3">
-                  Accepted Students
-                </h5>
+                <h5 className="fw-bold mb-3">Accepted Interns</h5>
+                <input className="form-control mb-3" placeholder="Search interns or messages" value={search} onChange={(event) => setSearch(event.target.value)} />
 
-                {students.map((student) => (
+                {students.filter((student) => [student.student_name,student.roll_number,student.college,student.internship_title].join(" ").toLowerCase().includes(search.toLowerCase())).map((student) => (
                   <button
                     key={student.student_id}
                     type="button"
@@ -501,7 +383,7 @@ function CompanyMessages() {
                           </p>
 
                         </div>
-                      ) : messages.length === 0 ? (
+                      ) : messages.filter((item) => item.message.toLowerCase().includes(search.toLowerCase())).length === 0 ? (
                         <div className="text-center py-5">
 
                           <div
@@ -522,7 +404,7 @@ function CompanyMessages() {
 
                         </div>
                       ) : (
-                        messages.map((message) => (
+                        messages.filter((item) => item.message.toLowerCase().includes(search.toLowerCase())).map((message) => (
                           <div
                             key={message.id}
                             className={`d-flex mb-3 ${

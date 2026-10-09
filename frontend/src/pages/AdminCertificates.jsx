@@ -17,7 +17,8 @@ function AdminCertificates() {
       setError("");
 
       const usersResponse = await fetch(
-        "http://127.0.0.1:8000/api/users"
+        "http://127.0.0.1:8000/api/users",
+        { headers: { Authorization: `Bearer ${JSON.parse(sessionStorage.getItem("user") || "{}").token || ""}` } }
       );
 
       const internshipsResponse = await fetch(
@@ -139,9 +140,8 @@ function AdminCertificates() {
   // =========================
   // VIEW CERTIFICATE
   // =========================
-  const viewCertificate = (certificate) => {
-    const url = getCertificateUrl(certificate);
-    window.open(url, "_blank");
+  const viewCertificate = async (certificate) => {
+    try { const token = JSON.parse(sessionStorage.getItem("user") || "{}").token || ""; const response = await fetch(getCertificateUrl(certificate), { headers: { Authorization: `Bearer ${token}` } }); if (!response.ok) throw new Error("Unable to view certificate."); const url = URL.createObjectURL(await response.blob()); window.open(url, "_blank", "noopener,noreferrer"); setTimeout(() => URL.revokeObjectURL(url), 30000); } catch (error) { alert(error.message); }
   };
 
   // =========================
@@ -151,7 +151,8 @@ function AdminCertificates() {
     try {
       const url = getCertificateUrl(certificate);
 
-      const response = await fetch(url);
+      const token = JSON.parse(sessionStorage.getItem("user") || "{}").token || "";
+      const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
 
       if (!response.ok) {
         throw new Error("Unable to download certificate.");

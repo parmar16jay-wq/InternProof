@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-function CompanyTasks() {
+function CompanyTasks({ evaluationsOnly = false }) {
   const [user, setUser] = useState(null);
 
   const [acceptedStudents, setAcceptedStudents] = useState([]);
@@ -18,6 +18,8 @@ function CompanyTasks() {
   const [success, setSuccess] = useState("");
   const [companyTasks, setCompanyTasks] = useState([]);
   const [reviewBusy, setReviewBusy] = useState(false);
+  const [studentSearch, setStudentSearch] = useState("");
+  const [taskSearch, setTaskSearch] = useState("");
 
   // ============================================================
   // CHECK COMPANY LOGIN
@@ -102,71 +104,10 @@ function CompanyTasks() {
       setLoading(true);
       setError("");
 
-      // Get all internships
-      const internshipResponse = await fetch(
-        "/api/internships"
-      );
-
-      const internshipsData = await internshipResponse.json();
-
-      if (!internshipResponse.ok) {
-        throw new Error(
-          typeof internshipsData.detail === "string"
-            ? internshipsData.detail
-            : "Unable to load internships."
-        );
-      }
-
-      // Only company's internships
-      const companyInternships = internshipsData.filter(
-        (internship) =>
-          Number(internship.created_by) === Number(companyId)
-      );
-
-      const students = [];
-
-      // Get applications for every company internship
-      for (const internship of companyInternships) {
-        const applicationResponse = await fetch(
-          `/api/applications/internship/${internship.id}`
-        );
-
-        const applicationData = await applicationResponse.json();
-
-        if (!applicationResponse.ok) {
-          continue;
-        }
-
-        const acceptedApplications = applicationData.filter(
-          (application) =>
-            application.status === "accepted"
-        );
-
-        acceptedApplications.forEach((application) => {
-          students.push({
-            student_id: application.student_id,
-            application_id: application.id,
-            internship_id: internship.id,
-            internship_title: internship.title,
-            company_name: internship.company_name,
-            start_date: internship.start_date,
-            end_date: internship.end_date
-          });
-        });
-      }
-
-      // Remove duplicate student + internship combinations
-      const uniqueStudents = students.filter(
-        (student, index, array) =>
-          index ===
-          array.findIndex(
-            (item) =>
-              Number(item.student_id) ===
-                Number(student.student_id) &&
-              Number(item.internship_id) ===
-                Number(student.internship_id)
-          )
-      );
+      const response = await fetch("/api/company/workspace", { headers: authHeaders() });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Unable to load company interns.");
+      const uniqueStudents = data.interns;
 
       setAcceptedStudents(uniqueStudents);
 
@@ -320,7 +261,7 @@ function CompanyTasks() {
           to="/company/dashboard"
           className="btn btn-primary"
         >
-          â† Back to Dashboard
+          ← Back to Dashboard
         </Link>
 
       </div>
@@ -359,7 +300,7 @@ function CompanyTasks() {
           NO ACCEPTED STUDENTS
       ========================== */}
 
-      {acceptedStudents.length === 0 ? (
+      {!evaluationsOnly && acceptedStudents.length === 0 ? (
 
         <div className="card shadow-sm border-0">
 
@@ -378,7 +319,7 @@ function CompanyTasks() {
 
         </div>
 
-      ) : (
+      ) : !evaluationsOnly && (
 
         <div className="row g-4">
 
@@ -392,11 +333,10 @@ function CompanyTasks() {
 
               <div className="card-body">
 
-                <h4 className="fw-bold mb-3">
-                  Accepted Students
-                </h4>
+                <h4 className="fw-bold mb-3">Select an intern</h4>
+                <input className="form-control mb-3" placeholder="Search name, roll number, college, internship?" value={studentSearch} onChange={(event) => setStudentSearch(event.target.value)} />
 
-                {acceptedStudents.map(
+                {acceptedStudents.filter((student) => [student.student_name, student.roll_number, student.college, student.internship_title, student.email].join(" ").toLowerCase().includes(studentSearch.toLowerCase())).map(
                   (student) => {
 
                     const isSelected =
@@ -473,8 +413,7 @@ function CompanyTasks() {
                     <strong>
                       Selected Student:
                     </strong>{" "}
-                    Student ID{" "}
-                    {selectedStudent.student_id}
+                    {selectedStudent.student_name || `Student #${selectedStudent.student_id}`}
 
                     <br />
 
@@ -586,10 +525,28 @@ function CompanyTasks() {
 
       )}
 
-      {companyTasks.length > 0 && <div className="card shadow-sm mt-5"><div className="card-body"><h4 className="fw-bold mb-3">Task Submissions & Review</h4><div className="row g-3 mb-4">{progressGroups.map((group) => <div className="col-md-6" key={`${group.student}-${group.internship}`}><div className="bg-light rounded p-3"><strong>{group.student}</strong><div className="small text-muted">{group.internship}</div><div className="mt-2">Verified progress: {group.approved} / {group.total} ({Math.round(group.approved / group.total * 100)}%)</div></div></div>)}</div><div className="row g-3">{companyTasks.map(({ task, submission, history = [], student_name, internship_title }) => <div className="col-lg-6" key={task.id}><div className="border rounded p-3 h-100"><div className="d-flex justify-content-between"><strong>{task.title}</strong><span className={`badge ${task.status === "approved" ? "bg-success" : task.status === "changes_required" ? "bg-warning text-dark" : "bg-info text-dark"}`}>{task.status.replaceAll("_", " ")}</span></div><div className="small text-muted">{student_name} Â· {internship_title} Â· Due {task.due_date || "No due date"}</div>{submission ? <><hr/><p className="mb-2"><strong>Submitted:</strong> {new Date(submission.submitted_at).toLocaleString()}</p><p>{submission.submission_description}</p>{submission.evidence_file_name && <><p className="small mb-1">{submission.evidence_file_name} Â· {Math.ceil(submission.evidence_file_size / 1024)} KB</p><p className="small text-break"><strong>SHA-256:</strong> {submission.evidence_file_hash}</p><button className="btn btn-sm btn-outline-primary mb-3 me-2" onClick={() => downloadEvidence(submission)}>Download evidence</button><button className="btn btn-sm btn-outline-secondary mb-3" onClick={() => verifyEvidence(submission)}>Verify file integrity</button></>}<p className="small text-muted">SHA-256 is an integrity fingerprint; it does not prove authorship.</p>{submission.github_url && <p><a href={submission.github_url} target="_blank" rel="noreferrer">GitHub repository</a></p>}{submission.live_url && <p><a href={submission.live_url} target="_blank" rel="noreferrer">Live project</a></p>}{submission.review_comment && <div className="alert alert-warning">Previous feedback: {submission.review_comment}</div>}{submission.reviewed_by && <p className="small text-muted">Reviewed by your company on {new Date(submission.reviewed_at).toLocaleString()}</p>}{submission.status === "under_review" && <div className="d-flex gap-2"><button className="btn btn-success btn-sm" disabled={reviewBusy} onClick={() => reviewSubmission(submission, "approved")}>Approve Task</button><button className="btn btn-outline-warning btn-sm" disabled={reviewBusy} onClick={() => reviewSubmission(submission, "changes_required")}>Request Changes</button></div>}</> : <p className="text-muted mb-0 mt-2">No submission yet.</p>}{history.length > 1 && <details className="mt-3"><summary>Submission history ({history.length})</summary>{history.map((record, i) => <div className="small border-top pt-2 mt-2" key={record.id}>Submission #{history.length - i} Â· {record.status.replaceAll("_", " ")} Â· {new Date(record.submitted_at).toLocaleString()}{record.review_comment && <div>{record.review_comment}</div>}</div>)}</details>}</div></div>)}</div></div></div>}
+      {!evaluationsOnly && companyTasks.length > 0 && <div className="card shadow-sm mt-5"><div className="card-body"><h4 className="fw-bold mb-3">Task Submissions & Review</h4><input className="form-control mb-3" placeholder="Search tasks, interns, internship, or status?" value={taskSearch} onChange={(event) => setTaskSearch(event.target.value)} /><div className="row g-3 mb-4">{progressGroups.map((group) => <div className="col-md-6" key={`${group.student}-${group.internship}`}><div className="bg-light rounded p-3"><strong>{group.student}</strong><div className="small text-muted">{group.internship}</div><div className="mt-2">Verified progress: {group.approved} / {group.total} ({Math.round(group.approved / group.total * 100)}%)</div></div></div>)}</div><div className="row g-3">{companyTasks.filter((item) => [item.task.title,item.task.description,item.student_name,item.internship_title,item.task.status].join(" ").toLowerCase().includes(taskSearch.toLowerCase())).map(({ task, submission, history = [], student_name, internship_title }) => <div className="col-lg-6" key={task.id}><div className="border rounded p-3 h-100"><div className="d-flex justify-content-between"><strong>{task.title}</strong><span className={`badge ${task.status === "approved" ? "bg-success" : task.status === "changes_required" ? "bg-warning text-dark" : "bg-info text-dark"}`}>{task.status.replaceAll("_", " ")}</span></div><div className="small text-muted">{student_name} · {internship_title} · Due {task.due_date || "No due date"}</div>{submission ? <><hr/><p className="mb-2"><strong>Submitted:</strong> {new Date(submission.submitted_at).toLocaleString()}</p><p>{submission.submission_description}</p>{submission.evidence_file_name && <><p className="small mb-1">{submission.evidence_file_name} · {Math.ceil(submission.evidence_file_size / 1024)} KB</p><p className="small text-break"><strong>SHA-256:</strong> {submission.evidence_file_hash}</p><button className="btn btn-sm btn-outline-primary mb-3 me-2" onClick={() => downloadEvidence(submission)}>Download evidence</button><button className="btn btn-sm btn-outline-secondary mb-3" onClick={() => verifyEvidence(submission)}>Verify file integrity</button></>}<p className="small text-muted">SHA-256 is an integrity fingerprint; it does not prove authorship.</p>{submission.github_url && <p><a href={submission.github_url} target="_blank" rel="noreferrer">GitHub repository</a></p>}{submission.live_url && <p><a href={submission.live_url} target="_blank" rel="noreferrer">Live project</a></p>}{submission.review_comment && <div className="alert alert-warning">Previous feedback: {submission.review_comment}</div>}{submission.reviewed_by && <p className="small text-muted">Reviewed by your company on {new Date(submission.reviewed_at).toLocaleString()}</p>}{submission.status === "under_review" && <div className="d-flex gap-2"><button className="btn btn-success btn-sm" disabled={reviewBusy} onClick={() => reviewSubmission(submission, "approved")}>Approve Task</button><button className="btn btn-outline-warning btn-sm" disabled={reviewBusy} onClick={() => reviewSubmission(submission, "changes_required")}>Request Changes</button></div>}</> : <p className="text-muted mb-0 mt-2">No submission yet.</p>}{history.length > 1 && <details className="mt-3"><summary>Submission history ({history.length})</summary>{history.map((record, i) => <div className="small border-top pt-2 mt-2" key={record.id}>Submission #{history.length - i} · {record.status.replaceAll("_", " ")} · {new Date(record.submitted_at).toLocaleString()}{record.review_comment && <div>{record.review_comment}</div>}</div>)}</details>}</div></div>)}</div></div></div>}
+
+      <section className={`card shadow-sm ${evaluationsOnly ? "mt-0" : "mt-5"}`}><div className="card-body"><h4 className="fw-bold mb-2">Mentor Evaluations</h4><p className="text-muted">Submit an evaluation after reviewing the student’s internship work. The college retains final internship verification.</p>{acceptedStudents.length ? <><input className="form-control mb-3" placeholder="Search mentor evaluations by intern or internship" value={studentSearch} onChange={(event) => setStudentSearch(event.target.value)} /><div className="row g-3">{acceptedStudents.filter((item) => [item.student_name,item.roll_number,item.college,item.internship_title].join(" ").toLowerCase().includes(studentSearch.toLowerCase())).map((item) => <div className="col-lg-6" key={`${item.student_id}-${item.internship_id}`}><MentorEvaluationForm item={item} authHeaders={authHeaders} /></div>)}</div></> : <p className="mb-0">Evaluations become available when a student is accepted.</p>}</div></section>
 
     </div>
   );
+}
+
+function MentorEvaluationForm({ item, authHeaders }) {
+  const [evaluation, setEvaluation] = useState("");
+  const [rating, setRating] = useState("5");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (event) => {
+    event.preventDefault(); setBusy(true); setMessage("");
+    try {
+      const response = await fetch(`/api/company/internships/${item.internship_id}/evaluation`, { method: "PUT", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ student_id: item.student_id, evaluation, rating: Number(rating) }) });
+      const data = await response.json(); if (!response.ok) throw new Error(data.detail || "Unable to submit evaluation.");
+      setMessage("Evaluation submitted for college review.");
+    } catch (error) { setMessage(error.message); } finally { setBusy(false); }
+  };
+  return <div className="border rounded p-3 h-100"><b>{item.internship_title}</b><div className="small text-muted mb-3">{item.student_name} · {item.college || "College"}</div>{item.evaluation_requested ? <form onSubmit={submit}><label className="form-label">Mentor evaluation for college review</label><textarea required minLength={10} className="form-control mb-3" rows="3" value={evaluation} onChange={(e) => setEvaluation(e.target.value)} /><label className="form-label">Rating</label><select className="form-select mb-3" value={rating} onChange={(e) => setRating(e.target.value)}>{[5,4,3,2,1].map((n) => <option key={n} value={n}>{n}/5</option>)}</select><button className="btn btn-primary btn-sm" disabled={busy}>{busy ? "Submitting…" : "Submit evaluation"}</button>{message && <div className="small mt-2" role="status">{message}</div>}</form> : <p className="text-muted mb-0">Waiting for the college to request a mentor evaluation.</p>}</div>;
 }
 
 export default CompanyTasks;

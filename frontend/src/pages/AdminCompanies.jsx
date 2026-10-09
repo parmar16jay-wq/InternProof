@@ -5,6 +5,7 @@ function AdminCompanies() {
   const navigate = useNavigate();
 
   const [users, setUsers] = useState([]);
+  const [companyVerification, setCompanyVerification] = useState([]);
   const [internships, setInternships] = useState([]);
   const [applications, setApplications] = useState([]);
 
@@ -50,7 +51,8 @@ function AdminCompanies() {
 
       // Get all users
       const usersResponse = await fetch(
-        "http://127.0.0.1:8000/api/users"
+        "http://127.0.0.1:8000/api/users",
+        { headers: { Authorization: `Bearer ${JSON.parse(sessionStorage.getItem("user") || "{}").token || ""}` } }
       );
 
       if (!usersResponse.ok) {
@@ -58,6 +60,16 @@ function AdminCompanies() {
       }
 
       const usersData = await usersResponse.json();
+
+      const storedUser = JSON.parse(sessionStorage.getItem("user") || "{}");
+      const verificationResponse = await fetch(
+        "http://127.0.0.1:8000/api/admin/companies",
+        { headers: { Authorization: `Bearer ${storedUser.token || ""}` } }
+      );
+      if (!verificationResponse.ok) {
+        throw new Error("Unable to load company verification statuses.");
+      }
+      const verificationData = await verificationResponse.json();
 
       // Get all internships
       const internshipsResponse = await fetch(
@@ -97,6 +109,7 @@ function AdminCompanies() {
       }
 
       setUsers(usersData);
+      setCompanyVerification(verificationData);
       setInternships(internshipsData);
       setApplications(allApplications);
     } catch (err) {
@@ -114,6 +127,24 @@ function AdminCompanies() {
   const companies = users.filter(
     (user) => user.role === "company"
   );
+
+  const updateCompanyStatus = async (company, status) => {
+    try {
+      setError("");
+      const storedUser = JSON.parse(sessionStorage.getItem("user") || "{}");
+      const response = await fetch(
+        `http://127.0.0.1:8000/api/admin/companies/${company.id}/verification?status=${status}`,
+        { method: "PUT", headers: { Authorization: `Bearer ${storedUser.token || ""}` } }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Unable to update company verification.");
+      setCompanyVerification((current) => current.map((item) => item.id === company.id
+        ? { ...item, verification_status: data.verification_status, company_verified: data.verification_status === "verified", verified_by: data.verified_by, verified_at: data.verified_at }
+        : item));
+    } catch (err) {
+      setError(err.message || "Unable to update company verification.");
+    }
+  };
 
   // =====================================================
   // COMPANY STATISTICS
@@ -485,6 +516,10 @@ function AdminCompanies() {
 
                     <th>Email</th>
 
+                    <th>Verification</th>
+
+                    <th>Actions</th>
+
                     <th>Internships</th>
 
                     <th>Active</th>
@@ -502,6 +537,9 @@ function AdminCompanies() {
                 <tbody>
 
                   {companies.map((company) => {
+
+                    const verification = companyVerification.find((item) => item.id === company.id);
+                    const verificationStatus = verification?.verification_status || "pending";
 
                     const companyInternships =
                       getCompanyInternships(company.id);
@@ -541,6 +579,23 @@ function AdminCompanies() {
 
                         <td>
                           {company.email}
+                        </td>
+
+                        <td>
+                          <span className={`badge ${verificationStatus === "verified" ? "bg-success" : verificationStatus === "rejected" ? "bg-danger" : "bg-warning text-dark"}`}>
+                            {verificationStatus}
+                          </span>
+                        </td>
+
+                        <td>
+                          {verificationStatus === "verified" ? (
+                            <button className="btn btn-sm btn-outline-danger" onClick={() => updateCompanyStatus(company, "rejected")}>Revoke approval</button>
+                          ) : (
+                            <div className="d-flex gap-2">
+                              <button className="btn btn-sm btn-success" onClick={() => updateCompanyStatus(company, "verified")}>Verify</button>
+                              {verificationStatus !== "rejected" && <button className="btn btn-sm btn-outline-danger" onClick={() => updateCompanyStatus(company, "rejected")}>Reject</button>}
+                            </div>
+                          )}
                         </td>
 
 

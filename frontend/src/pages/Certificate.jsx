@@ -81,6 +81,17 @@ function Certificate() {
     );
   };
 
+  const openCertificate = async (certificate, download = false) => {
+    try {
+      const response = await fetch(getCertificateUrl(certificate), { headers: { Authorization: `Bearer ${user?.token || ""}` } });
+      if (!response.ok) throw new Error("Unable to open certificate PDF.");
+      const url = URL.createObjectURL(await response.blob());
+      if (download) { const link = document.createElement("a"); link.href = url; link.download = `certificate_${certificate.student_id}_${certificate.internship_id}.pdf`; link.click(); }
+      else window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { setError(error.message); }
+  };
+
   if (loading) {
     return (
       <div className="container py-5">
@@ -171,11 +182,6 @@ function Certificate() {
           {certificates.map(
             (certificate) => {
 
-              const certificateUrl =
-                getCertificateUrl(
-                  certificate
-                );
-
               return (
                 <div
                   className="col-md-6"
@@ -252,22 +258,13 @@ function Certificate() {
                       {/* PDF buttons */}
                       <div className="d-flex gap-2 flex-wrap">
 
-                        <a
-                          href={certificateUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn btn-primary"
-                        >
+                        <button type="button" onClick={() => openCertificate(certificate)} className="btn btn-primary">
                           📄 View Certificate
-                        </a>
+                        </button>
 
-                        <a
-                          href={certificateUrl}
-                          download
-                          className="btn btn-outline-primary"
-                        >
+                        <button type="button" onClick={() => openCertificate(certificate, true)} className="btn btn-outline-primary">
                           ⬇ Download PDF
-                        </a>
+                        </button>
 
                       </div>
 

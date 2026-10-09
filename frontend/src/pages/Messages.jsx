@@ -151,7 +151,7 @@ function Messages() {
       setMessagesLoading(true);
 
       const response = await fetch(
-        `http://127.0.0.1:8000/api/messages/user/${studentId}`
+        `/api/messages/user/${studentId}`, { headers: { Authorization: `Bearer ${user?.token || ""}` } }
       );
 
       if (!response.ok) {
@@ -194,9 +194,9 @@ function Messages() {
       for (const message of unreadMessages) {
         try {
           await fetch(
-            `http://127.0.0.1:8000/api/messages/${message.id}/read`,
+            `/api/messages/${message.id}/read`,
             {
-              method: "PUT",
+              method: "PUT", headers: { Authorization: `Bearer ${user?.token || ""}` },
             }
           );
         } catch (error) {
@@ -260,12 +260,10 @@ function Messages() {
       setSending(true);
 
       const response = await fetch(
-        "http://127.0.0.1:8000/api/messages",
+        "/api/messages",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${user?.token || ""}` },
           body: JSON.stringify({
             sender_id: user.user_id,
             receiver_id: companyId,

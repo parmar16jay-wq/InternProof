@@ -127,16 +127,6 @@ function MyApplications() {
   };
 
   // ----------------------------------------
-  // Logout
-  // ----------------------------------------
-
-  const handleLogout = () => {
-    sessionStorage.removeItem("user");
-
-    window.location.href = "/login";
-  };
-
-  // ----------------------------------------
   // Loading screen
   // ----------------------------------------
 
@@ -198,25 +188,7 @@ function MyApplications() {
 
         </div>
 
-        <button
-          className="btn btn-outline-danger"
-          onClick={handleLogout}
-        >
-          Logout
-        </button>
-
-      </div>
-
-      {/* ====================================
-          BACK TO DASHBOARD
-      ==================================== */}
-
-      <div className="mb-4">
-
-        <Link
-          to="/student/dashboard"
-          className="btn btn-secondary"
-        >
+        <Link to="/student/dashboard" className="btn btn-secondary">
           ← Back to Dashboard
         </Link>
 

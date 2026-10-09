@@ -39,12 +39,8 @@ import CompanyTasks from "./pages/CompanyTasks";
 // COLLEGE
 // =========================
 import CollegeDashboard from "./pages/CollegeDashboard";
-import CollegeStudents from "./pages/CollegeStudents";
-import CollegeInternships from "./pages/CollegeInternships";
-import CollegeApplications from "./pages/CollegeApplications";
-import CollegeProgress from "./pages/CollegeProgress";
-import CollegeCertificates from "./pages/CollegeCertificates";
 import CollegeReports from "./pages/CollegeReports";
+import CollegeRecords from "./pages/CollegeRecords";
 
 // =========================
 // ADMIN
@@ -185,6 +181,8 @@ function App() {
           element={<CompanyTasks />}
         />
 
+        <Route path="/company/mentor-evaluations" element={<CompanyTasks evaluationsOnly />} />
+
         <Route path="/company/profile" element={<ProfilePage role="company" />} />
 
 
@@ -199,27 +197,26 @@ function App() {
 
         <Route
           path="/college/students"
-          element={<CollegeStudents />}
+          element={<CollegeRecords section="students" />}
         />
+
+        <Route path="/college/verification-requests" element={<CollegeRecords section="requests" />} />
 
         <Route
           path="/college/internships"
-          element={<CollegeInternships />}
+          element={<CollegeRecords section="internships" />}
         />
+
+        <Route path="/college/mentor-evaluations" element={<CollegeRecords section="evaluations" />} />
 
         <Route
           path="/college/applications"
-          element={<CollegeApplications />}
-        />
-
-        <Route
-          path="/college/progress"
-          element={<CollegeProgress />}
+          element={<CollegeRecords section="applications" />}
         />
 
         <Route
           path="/college/certificates"
-          element={<CollegeCertificates />}
+          element={<CollegeRecords section="certificates" />}
         />
 
         <Route

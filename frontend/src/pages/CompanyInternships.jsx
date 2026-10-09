@@ -69,6 +69,14 @@ function CompanyInternships() {
     }
   };
 
+  const updateStatus = async (internship, status) => {
+    try {
+      const response = await fetch(`/api/internships/${internship.id}`, { method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${user?.token || ""}` }, body: JSON.stringify({ ...internship, created_by: user.user_id, status }) });
+      const data = await response.json(); if (!response.ok) throw new Error(data.detail || "Unable to update opportunity");
+      await loadInternships(user.user_id);
+    } catch (error) { alert(error.message); }
+  };
+
   const handleDelete = async (internshipId) => {
     const confirmed = window.confirm(
       "Are you sure you want to delete this internship?"
@@ -149,15 +157,13 @@ function CompanyInternships() {
       {/* Header */}
       <div className="d-flex justify-content-between align-items-start mb-4">
         <div>
-          <h1 className="fw-bold mb-2">
-            My Internships
-          </h1>
+          <h1 className="fw-bold mb-2">Internship Opportunities</h1>
 
           <p className="text-muted mb-0">
             View and manage the internships posted by your company.
           </p>
         </div>
-
+        <Link to="/company/internships/create" className="btn btn-primary">Create opportunity</Link>
         <Link
           to="/company/dashboard"
           className="btn btn-primary"
@@ -287,6 +293,8 @@ function CompanyInternships() {
                       "Not specified"}
                   </p>
 
+                  <button type="button" className="btn btn-outline-primary me-2" onClick={() => { const title = window.prompt("Internship title", internship.title); if (title === null) return; const description = window.prompt("Description", internship.description); if (description === null) return; updateStatus({ ...internship, title, description }, internship.status); }}>Edit</button>
+                  <button type="button" className="btn btn-outline-secondary me-2" onClick={() => updateStatus(internship, internship.status === "closed" ? "active" : "closed")}>{internship.status === "closed" ? "Reopen" : "Close opportunity"}</button>
                   <button
                     type="button"
                     className="btn btn-outline-danger"

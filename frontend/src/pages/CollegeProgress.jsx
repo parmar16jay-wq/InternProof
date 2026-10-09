@@ -217,7 +217,7 @@ function CollegeProgress() {
         </div>
 
         <Link to="/college/dashboard" className="btn btn-primary">
-          â† Back to Dashboard
+          ← Back to Dashboard
         </Link>
       </div>
 

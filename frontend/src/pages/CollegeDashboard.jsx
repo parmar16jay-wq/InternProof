@@ -1,17 +1,42 @@
-﻿import { useEffect,useState } from "react";
-import { Link,useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { LoadingSpinner, PageHeader, StatCard } from "../UiComponents";
 
-function CollegeDashboard(){
- const navigate=useNavigate();const[user,setUser]=useState(null);const[users,setUsers]=useState([]);const[internships,setInternships]=useState([]);const[applications,setApplications]=useState([]);const[tasks,setTasks]=useState([]);const[certificates,setCertificates]=useState([]);const[loading,setLoading]=useState(true);
- useEffect(()=>{let session;try{session=JSON.parse(sessionStorage.getItem("user")||"null")}catch{sessionStorage.removeItem("user")}if(!session){navigate("/login");return}if(session.role!=="college"){navigate("/login");return}setUser(session);(async()=>{try{const[ur,ir]=await Promise.all([fetch("/api/users"),fetch("/api/internships")]);const people=ur.ok?await ur.json():[];const placements=ir.ok?await ir.json():[];const students=people.filter((item)=>item.role==="student");setUsers(students);setInternships(placements);const [appLists,taskLists,certificateLists]=await Promise.all([Promise.all(placements.map(async(item)=>{try{const r=await fetch(`/api/applications/internship/${item.id}`);return r.ok?await r.json():[]}catch{return []}})),Promise.all(students.map(async(item)=>{try{const r=await fetch(`/api/tasks/student/${item.id}`,{headers:{Authorization:`Bearer ${session.token||""}`}});return r.ok?await r.json():[]}catch{return []}})),Promise.all(students.map(async(item)=>{try{const r=await fetch(`/api/certificates/student/${item.id}`);return r.ok?await r.json():[]}catch{return []}}))]);setApplications(appLists.flat());setTasks(taskLists.flat());setCertificates(certificateLists.flat())}catch(error){console.error("College dashboard error:",error)}finally{setLoading(false)}})()},[navigate]);
- const accepted=applications.filter((item)=>item.status==="accepted").length;const completed=tasks.filter((item)=>item.status==="approved").length;const active=internships.filter((item)=>item.status==="active").length;const rate=tasks.length?Math.round(completed/tasks.length*100):0;
- if(loading)return <div className="page-loading"><div className="spinner-border text-primary"/><span>Loading college overviewâ€¦</span></div>;
- return <div className="dashboard-page"><div className="page-heading-row"><div><span className="section-eyebrow">COLLEGE OVERVIEW</span><h1 className="mt-2">Welcome, {user?.full_name?.split(" ")[0]||"team"}.</h1><p className="text-muted mb-0">Monitor internship activity and student outcomes across the platform.</p></div><Link to="/college/reports" className="btn btn-outline-primary">View reports <span className="ms-2">â†—</span></Link></div>
- <div className="row g-3 mt-2">{[["Students",users.length,"Student accounts","/college/students"],["Internships",internships.length,"Platform opportunities","/college/internships"],["Applications",applications.length,`${accepted} accepted`,"/college/applications"],["Active internships",active,"Currently active","/college/internships"],["Completed tasks",completed,`${rate}% task completion`,"/college/progress"],["Certificates",certificates.length,"Issued records","/college/certificates"]].map(([label,value,note,to])=><div className="col-6 col-xl-4" key={label}><Link to={to} className="metric-card"><span>{label}</span><strong>{value}</strong><small>{note}</small><i>â†—</i></Link></div>)}</div>
- <div className="row g-3 mt-1"><div className="col-lg-7"><section className="panel-card"><div className="panel-heading"><div><span className="section-eyebrow">STUDENT OVERVIEW</span><h2>Student directory</h2></div><Link to="/college/students">View students â†—</Link></div>{users.length?users.slice(0,6).map((student)=><div className="activity-row" key={student.id}><span className="activity-symbol">{(student.full_name||"S").slice(0,1).toUpperCase()}</span><span className="activity-copy"><b>{student.full_name||`Student #${student.id}`}</b><small>{student.email}</small></span><Link className="small" to="/college/progress">Progress â†—</Link></div>):<div className="empty-inline"><span>No student records are available.</span></div>}</section></div><div className="col-lg-5"><section className="panel-card progress-panel"><div className="panel-heading"><div><span className="section-eyebrow">PROGRESS OVERVIEW</span><h2>Task completion</h2></div><Link to="/college/progress">Details â†—</Link></div><div className="progress-number">{rate}<small>%</small></div><div className="progress track-progress"><div className="progress-bar" style={{width:`${rate}%`}}/></div><div className="d-flex justify-content-between mt-2 small text-muted"><span>{completed} completed</span><span>{tasks.length} assigned</span></div><div className="quick-links mt-3"><Link to="/college/applications"><span>Application overview</span><small>{applications.length-accepted} awaiting review</small><b>â†—</b></Link><Link to="/college/certificates"><span>Certificate overview</span><small>{certificates.length} records available</small><b>â†—</b></Link></div></section></div></div>
- <div className="row g-3 mt-1"><div className="col-12"><section className="panel-card"><div className="panel-heading"><div><span className="section-eyebrow">INTERNSHIP OVERVIEW</span><h2>Current opportunities</h2></div><Link to="/college/internships">Browse all â†—</Link></div>{internships.length?internships.slice(0,5).map((item)=><div className="opportunity-row" key={item.id}><div><b>{item.title}</b><small>{item.company_name||"Company"} Â· {item.location||"Location not listed"}</small></div><span className={`status-pill status-${item.status||"active"}`}>{item.status||"active"}</span></div>):<div className="empty-inline"><span>No internship records are available.</span></div>}</section></div></div>
- </div>
+const blank = { total_students: 0, verified_students: 0, pending_student_verification: 0, total_internships: 0, ongoing_internships: 0, completed_internships: 0, pending_internship_verification: 0, certificates_issued: 0, recent_activity: [] };
+
+export default function CollegeDashboard() {
+  const [data, setData] = useState(blank);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    let token = "";
+    try { token = JSON.parse(sessionStorage.getItem("user") || "{}").token || ""; } catch { /* handled by app chrome */ }
+    fetch("/api/college/overview", { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (r) => { const body = await r.json(); if (!r.ok) throw new Error(body.detail || "Unable to load college overview."); return body; })
+      .then((body) => { if (active) setData(body); })
+      .catch((err) => { if (active) setError(err.message); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+  if (loading) return <LoadingSpinner label="Loading college overview…" />;
+  const stats = [
+    ["Total Students", data.total_students, "Associated with this college", "/college/students"],
+    ["Verified Students", data.verified_students, "College approved", "/college/students"],
+    ["Pending Verification", data.pending_student_verification, "Requests to review", "/college/verification-requests"],
+    ["Total Internships", data.total_internships, "Student internship records", "/college/internships"],
+    ["Ongoing Internships", data.ongoing_internships, "Currently active", "/college/internships"],
+    ["Completed Internships", data.completed_internships, "Marked complete", "/college/internships"],
+    ["Pending Internship Review", data.pending_internship_verification, "Awaiting college decision", "/college/internships"],
+    ["Certificates Issued", data.certificates_issued, "Student records", "/college/certificates"],
+  ];
+  return <div className="dashboard-page">
+    <PageHeader eyebrow="COLLEGE OVERVIEW" title="College workspace" description="Verify student affiliation and review internship outcomes for your college." />
+    {error && <div className="alert alert-danger mt-3">{error}</div>}
+    <div className="row g-3 mt-2">{stats.map(([label, value, note, to]) => <div className="col-6 col-xl-3" key={label}><StatCard label={label} value={value} note={note} to={to} /></div>)}</div>
+    <section className="panel-card mt-3">
+      <div className="panel-heading"><div><span className="section-eyebrow">COLLEGE ACTIVITY</span><h2>Recent activity</h2></div><Link to="/college/verification-requests">Review requests ↗</Link></div>
+      {data.recent_activity.length ? data.recent_activity.map((item, i) => <div className="activity-row" key={`${item.type}-${i}`}><span className="activity-symbol">{item.type === "student" ? "S" : "I"}</span><span className="activity-copy"><b>{item.label}</b><small>{item.at ? new Date(item.at).toLocaleDateString() : "Recently"}</small></span></div>) : <div className="empty-inline"><b>No recent activity</b><span>New student verification requests and internship reviews will appear here.</span></div>}
+    </section>
+  </div>;
 }
-export default CollegeDashboard;
-
-

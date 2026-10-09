@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 function AvailableInternships() {
   const [internships, setInternships] = useState([]);
   const [applications, setApplications] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -91,6 +92,14 @@ function AvailableInternships() {
         application.internship_id === internshipId
     );
   };
+
+  const filteredInternships = internships.filter((internship) => {
+    const searchableText = [internship.title, internship.company_name, internship.location]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return searchableText.includes(searchQuery.trim().toLowerCase());
+  });
 
   // ----------------------------------------
   // Apply for internship
@@ -260,16 +269,28 @@ function AvailableInternships() {
         </div>
       )}
 
+      {!loading && internships.length > 0 && (
+        <section className="mb-4" aria-label="Search internships">
+          <label htmlFor="internship-search" className="visually-hidden">Search internships by role, company, or location</label>
+          <div className="d-flex align-items-center gap-3 px-4 py-2 bg-white shadow-sm" style={{ minHeight: 64, border: "1px solid #e4e7f0", borderRadius: 999, maxWidth: 980 }}>
+            <svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#5b5cff" strokeWidth="2" strokeLinecap="round"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></svg>
+            <input id="internship-search" className="form-control border-0 shadow-none p-0" style={{ minWidth: 0, background: "transparent" }} type="search" placeholder="Search roles, companies, or locations" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} />
+            {searchQuery && <button type="button" className="btn btn-sm rounded-pill px-3" style={{ color: "#5b5cff", backgroundColor: "#f0f0ff", whiteSpace: "nowrap" }} onClick={() => setSearchQuery("")}>Clear</button>}
+          </div>
+          <div className="small text-muted mt-2 ms-3">Showing {filteredInternships.length} of {internships.length} internships</div>
+        </section>
+      )}
+
 
       {/* ====================================
           INTERNSHIP CARDS
       ==================================== */}
 
-      {!loading && internships.length > 0 && (
+      {!loading && internships.length > 0 && filteredInternships.length > 0 && (
 
         <div className="row g-4">
 
-          {internships.map((internship) => (
+          {filteredInternships.map((internship) => (
 
             <div
               className="col-md-6 col-lg-4"
@@ -387,6 +408,10 @@ function AvailableInternships() {
 
         </div>
 
+      )}
+
+      {!loading && internships.length > 0 && filteredInternships.length === 0 && (
+        <div className="alert alert-info">No internships match those filters. Try changing or clearing your search.</div>
       )}
 
     </div>

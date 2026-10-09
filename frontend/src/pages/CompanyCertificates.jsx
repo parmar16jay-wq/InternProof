@@ -4,8 +4,10 @@ import { Link, useNavigate } from "react-router-dom";
 function CompanyCertificates() {
   const navigate = useNavigate();
 
-  const [user, setUser] = useState(null);
+  const [user] = useState(() => { try { return JSON.parse(sessionStorage.getItem("user") || "null"); } catch { return null; } });
   const [students, setStudents] = useState([]);
+  const [certificates, setCertificates] = useState([]);
+  const [certificateSearch, setCertificateSearch] = useState("");
   const [selectedStudent, setSelectedStudent] =
     useState(null);
 
@@ -18,6 +20,18 @@ function CompanyCertificates() {
 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  const loadAcceptedStudents = async () => {
+    try {
+      const token = JSON.parse(sessionStorage.getItem("user") || "{}").token || "";
+      const response = await fetch("/api/company/workspace", { headers: { Authorization: `Bearer ${token}` } });
+      const data = await response.json(); if (!response.ok) throw new Error(data.detail || "Unable to load company records.");
+      setStudents(data.interns); setCertificates(data.certificates || []);
+      if (data.interns.length) setSelectedStudent(data.interns[0]);
+    } catch (error) { setError(error.message || "Unable to load accepted interns."); }
+    finally { setLoading(false); }
+  };
+
 
   useEffect(() => {
     const storedUser =
@@ -37,11 +51,7 @@ function CompanyCertificates() {
         return;
       }
 
-      setUser(userData);
-
-      loadAcceptedStudents(
-        userData.user_id
-      );
+      setTimeout(() => { void loadAcceptedStudents(); }, 0);
     } catch (error) {
       console.error(
         "Invalid user data:",
@@ -53,123 +63,8 @@ function CompanyCertificates() {
     }
   }, [navigate]);
 
-  const loadAcceptedStudents = async (
-    companyId
-  ) => {
-    try {
-      setLoading(true);
-      setError("");
 
-      const internshipResponse =
-        await fetch(
-          "http://127.0.0.1:8000/api/internships"
-        );
-
-      if (!internshipResponse.ok) {
-        throw new Error(
-          "Unable to load internships."
-        );
-      }
-
-      const internships =
-        await internshipResponse.json();
-
-      const companyInternships =
-        internships.filter(
-          (internship) =>
-            internship.created_by ===
-            companyId
-        );
-
-      let acceptedStudents = [];
-
-      for (const internship of companyInternships) {
-        try {
-          const applicationResponse =
-            await fetch(
-              `http://127.0.0.1:8000/api/applications/internship/${internship.id}`
-            );
-
-          if (!applicationResponse.ok) {
-            continue;
-          }
-
-          const applications =
-            await applicationResponse.json();
-
-          const acceptedApplications =
-            applications.filter(
-              (application) =>
-                application.status ===
-                "accepted"
-            );
-
-          const students =
-            acceptedApplications.map(
-              (application) => ({
-                student_id:
-                  application.student_id,
-
-                application_id:
-                  application.id,
-
-                internship_id:
-                  internship.id,
-
-                internship_title:
-                  internship.title,
-
-                internship_company:
-                  internship.company_name,
-
-                internship_location:
-                  internship.location,
-
-                internship_start_date:
-                  internship.start_date,
-
-                internship_end_date:
-                  internship.end_date,
-
-                applied_at:
-                  application.applied_at,
-              })
-            );
-
-          acceptedStudents = [
-            ...acceptedStudents,
-            ...students,
-          ];
-        } catch (error) {
-          console.error(
-            `Unable to load applications for internship ${internship.id}:`,
-            error
-          );
-        }
-      }
-
-      setStudents(
-        acceptedStudents
-      );
-
-      if (acceptedStudents.length > 0) {
-        setSelectedStudent(
-          acceptedStudents[0]
-        );
-      }
-    } catch (error) {
-      console.error(
-        "Load accepted students error:",
-        error
-      );
-
-      setError(
-        "Unable to load accepted students."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+  const downloadCertificate = async (row) => { try { const response = await fetch(`/api/certificates/file/${row.student_id}/${row.internship_id}`, { headers: { Authorization: `Bearer ${user?.token || ""}` } }); if (!response.ok) throw new Error("Unable to download certificate"); const url = URL.createObjectURL(await response.blob()); const link = document.createElement("a"); link.href = url; link.download = `certificate_${row.student_id}_${row.internship_id}.pdf`; link.click(); URL.revokeObjectURL(url); } catch (error) { setError(error.message); } };
 
   const handleStudentSelect = (
     student
@@ -262,7 +157,7 @@ function CompanyCertificates() {
 
       const response =
         await fetch(
-          "http://127.0.0.1:8000/api/certificates/upload",
+          "/api/certificates/upload",
           {
             method: "POST",
             headers: { Authorization: `Bearer ${user?.token || ""}` },
@@ -289,9 +184,8 @@ function CompanyCertificates() {
         );
       }
 
-      setMessage(
-        "Certificate PDF uploaded successfully."
-      );
+      setMessage("Certificate PDF uploaded successfully.");
+      await loadAcceptedStudents();
 
       setSelectedFile(null);
 
@@ -351,7 +245,7 @@ function CompanyCertificates() {
           </h1>
 
           <p className="text-muted mb-0">
-            Upload PDF certificates for accepted students.
+            Issue a certificate after every assigned task has been approved. The student and company can download it immediately; the college can download after approving the mentor evaluation.
           </p>
         </div>
 
@@ -420,11 +314,10 @@ function CompanyCertificates() {
 
               <div className="card-body">
 
-                <h5 className="fw-bold mb-3">
-                  Accepted Students
-                </h5>
+                <h5 className="fw-bold mb-3">Accepted Students</h5>
+                <input className="form-control mb-3" placeholder="Search accepted interns?" value={certificateSearch} onChange={(event) => setCertificateSearch(event.target.value)} />
 
-                {students.map(
+                {students.filter((student) => [student.student_name,student.roll_number,student.college,student.internship_title].join(" ").toLowerCase().includes(certificateSearch.toLowerCase())).map(
                   (student) => (
                     <button
                       key={`${student.student_id}-${student.internship_id}`}
@@ -457,6 +350,7 @@ function CompanyCertificates() {
                         {
                           student.internship_title
                         }
+                        {student.certificate_eligible ? " · Ready to issue" : " · Tasks still need approval"}
                       </small>
                     </button>
                   )
@@ -507,6 +401,8 @@ function CompanyCertificates() {
                     </div>
 
                     <hr />
+
+                    {!selectedStudent.certificate_eligible && <div className="alert alert-info">Approve all assigned tasks before issuing this certificate.</div>}
 
                     <form
                       onSubmit={
@@ -560,7 +456,7 @@ function CompanyCertificates() {
                         className="btn btn-primary"
                         disabled={
                           uploading ||
-                          !selectedFile
+                          !selectedFile || !selectedStudent.certificate_eligible
                         }
                       >
                         {uploading
@@ -600,6 +496,7 @@ function CompanyCertificates() {
 
         </div>
       )}
+      <section className="card shadow-sm mt-4"><div className="card-body"><h4 className="fw-bold">Issued Certificates</h4>{certificates.length ? <div className="table-responsive"><table className="table"><thead><tr><th>Student</th><th>Internship</th><th>Certificate</th><th>Issued</th><th></th></tr></thead><tbody>{certificates.filter((row)=>[row.student_name,row.internship_title,row.certificate_number].join(" ").toLowerCase().includes(certificateSearch.toLowerCase())).map((row)=><tr key={row.id}><td>{row.student_name}</td><td>{row.internship_title}</td><td>{row.certificate_number}</td><td>{row.issue_date||"?"}</td><td><button className="btn btn-sm btn-outline-primary" onClick={() => downloadCertificate(row)}>Download</button></td></tr>)}</tbody></table></div>:<p className="text-muted mb-0">No certificates issued yet.</p>}</div></section>
 
     </div>
   );

@@ -12,11 +12,28 @@ class RegisterRequest(BaseModel):
         "company",
         "college"
     ]
+    college_id: int | None = None
+    college_code: str | None = None
+    company_code: str | None = None
+    roll_number: str | None = None
+    department: str | None = None
+    course: str | None = None
+    year: str | None = None
+    semester: str | None = None
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+
+class StudentCollegeAffiliationRequest(BaseModel):
+    college_id: int
+    roll_number: str
+    department: str
+    course: str
+    year: str
+    semester: str
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -106,6 +123,16 @@ class CertificateCreateRequest(BaseModel):
     certificate_number: str
     issue_date: date
     issued_by: str
+
+
+class MentorEvaluationRequest(BaseModel):
+    student_id: int
+    evaluation: str
+    rating: int | None = None
+    tasks_completed: int | None = None
+    tasks_total: int | None = None
+    approval_status: Literal["approved", "rejected", "pending"] = "pending"
+    mark_completed: bool = False
 
 
 class CertificateResponse(BaseModel):
