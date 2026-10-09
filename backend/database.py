@@ -1,74 +1,44 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.engine import URL
 
-
-# ==================================================
-# MySQL Database Configuration
-# ==================================================
-
+# Railway MySQL configuration
 DATABASE_URL = URL.create(
     drivername="mysql+pymysql",
-    username="root",
-    password="Jay@8327",
-    host="localhost",
-    port=3306,
-    database="internproof"
+    username=os.getenv("MYSQLUSER", "root"),
+    password=os.getenv("MYSQLPASSWORD", ""),
+    host=os.getenv("MYSQLHOST", "localhost"),
+    port=int(os.getenv("MYSQLPORT", "3306")),
+    database=os.getenv("MYSQLDATABASE", "internproof"),
 )
-
-
-# ==================================================
-# Create Database Engine
-# ==================================================
 
 engine = create_engine(
     DATABASE_URL,
-    echo=True
+    pool_pre_ping=True,
+    echo=False,
 )
-
-
-# ==================================================
-# Create Session
-# ==================================================
 
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
-    bind=engine
+    bind=engine,
 )
-
-
-# ==================================================
-# Create Base
-# ==================================================
 
 Base = declarative_base()
 
 
-# ==================================================
-# Database Dependency
-# ==================================================
-
 def get_db():
     db = SessionLocal()
-
     try:
         yield db
-
     finally:
         db.close()
 
 
-# ==================================================
-# Test Database Connection
-# ==================================================
-
 if __name__ == "__main__":
-
     try:
         with engine.connect() as connection:
-            print("Connected to database:", connection.engine.url.database)
-
+            print("Database connection successful!")
     except Exception as error:
-        print("Database connection failed:")
-        print(error)
+        print("Database connection failed:", error)
