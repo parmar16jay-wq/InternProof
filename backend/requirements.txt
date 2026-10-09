@@ -7,3 +7,4 @@ python-jose[cryptography]
 passlib[bcrypt]
 email-validator
 reportlab
+pwdlib[argon2]
